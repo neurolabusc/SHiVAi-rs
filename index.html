@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/style.css" />
+  <link rel="icon" href="data:," />
+  <script>
+    // GitHub Pages cannot send COOP/COEP: install coi-sw.js and reload once so niimath can use threads.
+    // The sessionStorage flag stops a reload loop in a browser that ignores the headers.
+    if (!self.crossOriginIsolated && navigator.serviceWorker && !sessionStorage.coiReload) {
+      navigator.serviceWorker.register('coi-sw.js')
+      navigator.serviceWorker.ready.then(() => { sessionStorage.coiReload = 1; location.reload() })
+    }
+  </script>
+  <title>SHiVAi — small vessel disease markers in your browser</title>
+</head>
+
+<body>
+  <header>
+    <div class="row">
+      <strong class="brand">SHiVAi</strong>
+      <select id="exampleSelect" title="Load example images">
+        <option value="">Load example…</option>
+      </select>
+      <span class="markers" title="Markers to segment">
+        <label class="check" title="Perivascular spaces, from the T1"><input type="checkbox" id="taskPvs" checked /> PVS</label>
+        <label class="check" id="wmhLabel" title="White matter hyperintensities: needs a FLAIR"><input type="checkbox" id="taskWmh" checked /> WMH</label>
+        <label class="check" id="lacLabel" title="Lacunes: needs a FLAIR (244 MB model download)"><input type="checkbox" id="taskLac" /> Lacunes</label>
+      </span>
+      <button id="runBtn" disabled title="Segment the chosen markers">Run</button>
+      <button id="cancelBtn" class="hidden" title="Stop the run">Cancel</button>
+      <label for="sliceType">View</label>
+      <select id="sliceType" title="Slice layout applied to all three panels">
+        <option value="0">Axial</option>
+        <option value="1">Coronal</option>
+        <option value="2">Sagittal</option>
+        <option value="4">Render</option>
+        <option value="3" selected>A+C+S+R</option>
+      </select>
+      <span class="spacer"></span>
+      <button id="aboutBtn">About</button>
+    </div>
+  </header>
+
+  <main id="panels">
+    <section class="panel" data-slot="t1">
+      <div class="panel-head">
+        <span class="caption">T1-weighted</span>
+        <span id="t1Name" class="spacer"></span>
+      </div>
+      <div class="panel-canvas"><canvas id="glT1"></canvas></div>
+    </section>
+
+    <section class="panel" data-slot="flair">
+      <div class="panel-head">
+        <span class="caption">FLAIR (optional)</span>
+        <span id="flairName" class="spacer"></span>
+        <button id="clearFlair" class="clearBtn hidden" title="Remove the FLAIR (PVS only)" aria-label="Remove the FLAIR">×</button>
+      </div>
+      <div class="panel-canvas"><canvas id="glFlair"></canvas></div>
+    </section>
+
+    <section class="panel" data-slot="result">
+      <div class="panel-head">
+        <span class="caption">Result</span>
+        <select id="overlaySelect" disabled title="Overlay on the cropped, conformed T1"></select>
+        <span class="spacer"></span>
+        <button id="saveBtn" disabled title="Save the shown overlay(s) as NIfTI">Save</button>
+        <button id="saveAllBtn" disabled title="Save every output, the summary and the provenance">Save all</button>
+      </div>
+      <div class="panel-canvas"><canvas id="glResult"></canvas></div>
+      <div class="panel-foot"><table class="summary" id="summary"></table></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="statusbar">
+      <span class="statusleft">
+        <span class="drophint">Drop a T1 (and FLAIR) NIfTI image or DICOM folder on a panel</span>
+        <span id="location"></span>
+      </span>
+      <span class="statusright">
+        <progress id="progress" max="1" value="0" class="hidden"></progress>
+        <label id="statusMsg"></label>
+      </span>
+    </div>
+  </footer>
+
+  <dialog id="aboutDialog">
+    <form method="dialog">
+      <h3><a href="https://github.com/neurolabusc/SHiVAi-rs" target="_blank" rel="noopener">SHiVAi-rs</a></h3>
+      <p>Markers of cerebral small vessel disease, <strong>entirely in your browser</strong>: perivascular
+        spaces (PVS) from a T1-weighted image, and white matter hyperintensities (WMH) and lacunes from a
+        T1 with a FLAIR of the same session. No image leaves your computer.</p>
+      <p>This is a Rust port of <a href="https://github.com/pboutinaud/SHiVAi" target="_blank" rel="noopener">SHiVAi</a>'s
+        default pipeline: the SHiVA brain mask (two passes), 1 mm conforming, quickshear defacing, a
+        160 × 214 × 176 crop on the brain and 99th-percentile normalisation, then each marker as the mean
+        of its model's folds, thresholded into clusters. The pipeline runs as WebAssembly; the networks run on
+        WebGPU. The FLAIR is registered rigidly to the T1 with
+        <a href="https://github.com/rordenlab/niimath" target="_blank" rel="noopener">niimath</a>
+        (<code>-allineate -warp shr -cost nmi</code>) where SHiVAi uses ANTs. Cerebral microbleeds (SWI) are not offered.</p>
+      <p>Results are on the cropped 1 mm T1 grid. Against SHiVAi itself on the example: PVS Dice 0.999,
+        WMH 0.97, lacunes 1.0.</p>
+      <p><strong>Not for clinical use.</strong> Code: AGPL-3.0-or-later (derived from SHiVAi, © Fealinx).
+        Models: SHiVA segmentation models © Fealinx (Philippe Boutinaud et al.),
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>,
+        converted to <code>.shiva</code> and downloaded once from Hugging Face. Visualization:
+        <a href="https://niivue.com/" target="_blank" rel="noopener">NiiVue</a>; DICOM import:
+        <a href="https://github.com/rordenlab/dcm2niix" target="_blank" rel="noopener">dcm2niix</a>.</p>
+      <p><small>Cite: Boutinaud et al., Front Neuroinform 2021;15:641600 (PVS); Tsuchida et al., Hum Brain
+        Mapp 2024;45:e26548 (WMH). Requires a browser with WebGPU and a GPU.</small></p>
+      <button autofocus value="default">Close</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

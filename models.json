@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "app": "shivai",
+  "license": "CC-BY-NC-SA-4.0",
+  "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "license_owner": "Fealinx; SHiVA models by Philippe Boutinaud and the SHiVA team (https://github.com/pboutinaud)",
+  "license_note": "Redistributed in converted form under the upstream licence (CC BY-NC-SA 4.0): attribution, non-commercial use only, share alike. Not for clinical use.",
+  "attribution": "SHiVA segmentation models \u00a9 Fealinx (Philippe Boutinaud et al.), CC BY-NC-SA 4.0; converted to .shiva by Neurodesk.",
+  "modifications": "Converted with tools/lower.py (TF SavedModel or Keras -> tf2onnx -> .shiva): batch normalisation folded, float16 weights. Not retrained.",
+  "models": {
+    "brainmask": {
+      "source": "brainmask V0 (Unet3D-4.4.2, fold 0), model_info.json from the zip",
+      "source_url": "https://cloud.efixia.com/sharing/SXtROgtI7",
+      "source_zip_sha256": "fe0928d849c1f2866dbd8bf7e31c2bfdedcc97e98c4c7f107fbe07c122f65930"
+    },
+    "pvs": {
+      "source": "T1-PVS v5 (ResUnet3D-8.7.2-1.5), https://raw.githubusercontent.com/pboutinaud/SHIVA_PVS/refs/heads/main/model_info_t1-pvs-v5.json",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "source_zip_sha256": "ba5e5990f8a224b6210dcaf878ce690a424007e1c5748454b040304b8b882cc8",
+      "registration": "IDDN.FR.001.240015.000.S.P.2022.000.31230"
+    },
+    "wmh": {
+      "source": "T1.FLAIR-WMH v5 (ResUnet3D-8.7.2-1.5), https://raw.githubusercontent.com/pboutinaud/SHIVA_WMH/refs/heads/main/model_info_t1-flair-wmh-v5.json",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "source_zip_sha256": "101307f84eb64ba26f7384893a8f13db62992897bec6830a4493b50e86cbe105",
+      "registration": "IDDN.FR.001.240030.000.S.P.2022.000.31230"
+    },
+    "lac": {
+      "source": "T1.FLAIR-LAC v0 (ResUnet3D-8.9.2-1.5), https://raw.githubusercontent.com/pboutinaud/SHIVA_LAC/refs/heads/main/model_info_t1-flair-lac-v0.json",
+      "source_url": "https://cloud.efixia.com/sharing/imqU23Nvl",
+      "source_zip_sha256": "adb14247fe2a3ca87ef7b44933ff25151363e98e5eb0305e94756ab7f5458dcb"
+    }
+  },
+  "preprocessing_contract": {
+    "source": "crates/core/src/pipeline.rs",
+    "grid": [
+      160,
+      214,
+      176
+    ],
+    "spacing_mm": [
+      1,
+      1,
+      1
+    ],
+    "layout": "NCDHW, C order over RAS (x, y, z)",
+    "normalization": "/ 99th percentile inside the brain mask, clipped at 1.3, / 1.3"
+  },
+  "repository": "neurodeskorg/webapps",
+  "revision": "2c7e7e3e93cb5bd944f902c50c0c4246512c875e",
+  "base_url": "https://huggingface.co/datasets/neurodeskorg/webapps/resolve/2c7e7e3e93cb5bd944f902c50c0c4246512c875e/shivai/models/",
+  "assets": [
+    {
+      "filename": "shivai-brainmask.shiva",
+      "model": "brainmask",
+      "fold": 0,
+      "bytes": 885106,
+      "sha256": "6c4cc170f919e9c49455dfadc1ea3e2a9c3523e029cbee9934496ff2ee5ca2af",
+      "source_url": "https://cloud.efixia.com/sharing/SXtROgtI7",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-pvs-fold0.shiva",
+      "model": "pvs",
+      "fold": 0,
+      "bytes": 16875722,
+      "sha256": "d9674a71e085173419effc16439bf5b49e56c510540db9165f34f583ed901762",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-pvs-fold1.shiva",
+      "model": "pvs",
+      "fold": 1,
+      "bytes": 16875722,
+      "sha256": "24c4508c4a5705f1c3b7e285e7eb3df58d35e63b0740c7383e72422123d18c38",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-pvs-fold2.shiva",
+      "model": "pvs",
+      "fold": 2,
+      "bytes": 16875722,
+      "sha256": "f211dc045f43c744d7b2f35e9e96436bef5baa2eb28dacd0dfcdfb1e24dc2ac6",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-pvs-fold3.shiva",
+      "model": "pvs",
+      "fold": 3,
+      "bytes": 16875722,
+      "sha256": "388182eef1e0621c37da90e7896be0ffc86d9f03749ab8df744f99d4ab089d08",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-pvs-fold4.shiva",
+      "model": "pvs",
+      "fold": 4,
+      "bytes": 16875722,
+      "sha256": "b9b9cd75eb17bd1df888ef2f33b747d428bd5065114cb7e4c43c2a872a62e743",
+      "source_url": "https://cloud.efixia.com/sharing/TDbSoPRmm",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-wmh-fold0.shiva",
+      "model": "wmh",
+      "fold": 0,
+      "bytes": 16876154,
+      "sha256": "8ec4c635ffbd4e241c21f1d8fe1bff6ea38d46b3a05a2af0b6597cbc39e85599",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-wmh-fold1.shiva",
+      "model": "wmh",
+      "fold": 1,
+      "bytes": 16876154,
+      "sha256": "7fdb1508c506f81d1e16b6ed0036a96d32e73ff1b576c9aad0ae14a4d7aeb73e",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-wmh-fold2.shiva",
+      "model": "wmh",
+      "fold": 2,
+      "bytes": 16876154,
+      "sha256": "c5cd24c6e4db8eadf02412b1a448eb753350e8f5426e7b9c7be2d143281e2423",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-wmh-fold3.shiva",
+      "model": "wmh",
+      "fold": 3,
+      "bytes": 16876154,
+      "sha256": "822790c860addd7e182acec52cda8877b02925c4bd2c045c594aee0f1ce9606d",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-wmh-fold4.shiva",
+      "model": "wmh",
+      "fold": 4,
+      "bytes": 16876154,
+      "sha256": "d9a76d6b3304699cd58dea6c38a8a1c6be0cbb794bed5bc4d7c7f69016eb3537",
+      "source_url": "https://cloud.efixia.com/sharing/RiRbjLTam",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-lac-fold0.shiva",
+      "model": "lac",
+      "fold": 0,
+      "bytes": 85200830,
+      "sha256": "d43cc7c76e3d133cc2bb0154b0757aec05a0ab33838bb1f6637b4119cf1f8024",
+      "source_url": "https://cloud.efixia.com/sharing/imqU23Nvl",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-lac-fold1.shiva",
+      "model": "lac",
+      "fold": 1,
+      "bytes": 85200830,
+      "sha256": "7f4dc231af1702f00b82132f8ca9f384432b094bef394f86e5a3b67b1fd4f7ef",
+      "source_url": "https://cloud.efixia.com/sharing/imqU23Nvl",
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "filename": "shivai-lac-fold2.shiva",
+      "model": "lac",
+      "fold": 2,
+      "bytes": 85200830,
+      "sha256": "a196d9b88417786ad0f86f3a0583dba399949fe1c8ee16196934ce14d6c4822f",
+      "source_url": "https://cloud.efixia.com/sharing/imqU23Nvl",
+      "license": "CC-BY-NC-SA-4.0"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "shivai-rs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "SHiVAi small vessel disease segmentation in the browser: Rust/WebAssembly pipeline, WebGPU networks, niimath registration, NiiVue display.",
+  "scripts": {
+    "wasm": "wasm-pack build crates/wasm --release --target web --out-dir ../../src/wasm",
+    "dev": "wasm-pack build crates/wasm --release --target web --out-dir ../../src/wasm && vite",
+    "build": "wasm-pack build crates/wasm --release --target web --out-dir ../../src/wasm && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "wasm-pack build crates/wasm --release --target web --out-dir ../../src/wasm && tsc --noEmit && vite build && node test/smoke.mjs"
+  },
+  "dependencies": {
+    "@niivue/dcm2niix": "1.4.20261029",
+    "@niivue/niimath": "1.4.20261126",
+    "@niivue/niivue": "1.0.0-rc.238",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.52",
+    "playwright": "^1.57.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.2"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}

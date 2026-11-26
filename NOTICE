@@ -1,0 +1,43 @@
+SHiVAi-rs — SHiVAi in Rust, for the browser (WebAssembly + WebGPU) and the command line (AGPL-3.0-or-later)
+
+Ported from SHiVAi (https://github.com/pboutinaud/SHiVAi), Copyright (C) 2024 Fealinx,
+AGPL-3.0-or-later, registered at the Agence pour la Protection des Programmes
+(IDDN.FR.001.410014.000.S.P.2024.000.21000): the preprocessing (shivai/utils/preprocessing.py,
+interfaces/image.py, workflows/*), the prediction ensemble (scripts/predict_multi.py) and the
+cluster post-processing (postprocessing/clusters.py).
+
+Also ported: nibabel.processing.conform / rescale_affine (MIT), scipy.ndimage.affine_transform
+spline interpolation (BSD-3-Clause) and quickshear (BSD-3-Clause, Schimke & Hale 2011).
+The GPU convolution blocking follows Neurodesk's gpu-unet WebGPU executor (MIT). src/dcm2niix and
+public/coi-sw.js are adapted from EdgeReg (BSD-2-Clause, Chris Rorden).
+
+The SME microkernel follows brainchop-core's FP32 SME implementation
+(https://github.com/neuroneural/brainchop-core), under the MIT License:
+
+Copyright (c) 2024-2026 spikedoanz, Sergey Plis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+The SHiVA models (brain mask, PVS, WMH, lacunes; Philippe Boutinaud, Fealinx) are distributed
+under CC BY-NC-SA 4.0 and are not part of this repository. tools/lower.py converts them to .shiva files; the converted
+files are on the neurodeskorg/webapps Hugging Face dataset (models.json records licence, owner and
+provenance). The models and this software are not for clinical use.
+
+The macOS installer also contains niimath (BSD-2-Clause, Chris Rorden et al.,
+https://github.com/rordenlab/niimath) linked with LLVM's OpenMP runtime (Apache-2.0 WITH LLVM-exception).
