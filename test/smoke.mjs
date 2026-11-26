@@ -9,13 +9,18 @@ import { unzipSync } from 'fflate'
 
 const hardware = process.env.SHIVAI_HARDWARE_GPU === '1'
 const port = Number(process.env.SHIVAI_TEST_PORT || 4174)
+// page.evaluate and the server wait have no timeout of their own; name the stage that hangs.
+const within = (ms, what, promise) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out: ${what}`)), ms).unref())])
 const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'] })
-await new Promise((resolve, reject) => {
+await within(60000, 'vite preview', new Promise((resolve, reject) => {
   server.stdout.on('data', (d) => /Local:/.test(String(d)) && resolve())
   server.on('exit', (code) => reject(new Error(`vite preview exited (${code}); is port ${port} free?`)))
-})
+}))
+console.log('vite preview: up')
 const args = hardware ? ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'] : ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-angle=swiftshader']
-const browser = await chromium.launch({ headless: true, ...(hardware ? { channel: 'chromium' } : {}), args })
+const browser = await within(120000, 'chromium launch', chromium.launch({ headless: true, ...(hardware ? { channel: 'chromium' } : {}), args }))
+console.log('chromium: up')
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, acceptDownloads: true })
 const errors = []
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
@@ -24,14 +29,15 @@ if (process.env.DEBUG) page.on('console', (m) => console.log('page:', m.type(), 
 try {
   await page.goto(`http://localhost:${port}/`)
   await page.waitForFunction(() => /Drop images|WebGPU/.test(document.querySelector('#statusMsg')?.textContent ?? ''), null, { timeout: 60000 })
+  console.log('app: booted')
 
   const model = [...readFileSync(new URL('../fixtures/conformance.shiva', import.meta.url))]
   const fixture = JSON.parse(readFileSync(new URL('../fixtures/conformance.json', import.meta.url)))
   for (const precision of ['f32', 'f16']) {
-    const result = await page.evaluate(
+    const result = await within(180000, `conformance ${precision}`, page.evaluate(
       ({ model, fixture, precision }) => window.shivaiConformance(new Uint8Array(model).buffer, fixture.input, fixture.dims, precision),
       { model, fixture, precision },
-    )
+    ))
     if (result.skipped) {
       console.log(`conformance ${precision}: skipped (no shader-f16)`)
       continue
