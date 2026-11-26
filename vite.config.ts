@@ -9,7 +9,8 @@ const isolate = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Emb
 export default defineConfig({
   base: process.env.SHIVAI_BASE ?? '/',
   server: { open: '/index.html', port: 8092, headers: isolate },
-  preview: { headers: isolate },
+  // preview inherits server.open; the smoke test must not launch the system browser.
+  preview: { open: false, headers: isolate },
   worker: { format: 'es' },
   // site/, not dist/: dist/ holds the macOS installer.
   build: { target: 'esnext', outDir: 'site' },

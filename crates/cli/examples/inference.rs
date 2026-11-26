@@ -5,6 +5,10 @@ use shivai_core::{
     shiva::parse,
 };
 use std::{path::Path, time::Instant};
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+#[path = "../src/cuda.rs"]
+mod cuda;
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 #[path = "../src/metal.rs"]
@@ -14,7 +18,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     assert!(
         args.len() >= 6,
-        "inference cpu|metal MODEL OUTPUT REPEATS T1 [FLAIR]"
+        "inference cpu|metal|cuda MODEL OUTPUT REPEATS T1 [FLAIR]"
     );
     let model = parse(&std::fs::read(&args[2]).unwrap()).unwrap();
     let channels: Vec<_> = args[5..]
@@ -41,6 +45,13 @@ fn main() {
         "metal" => {
             let mut s = metal::Session::new(p).unwrap();
             s.load(&model);
+            Box::new(move || s.run(&input).unwrap())
+        }
+        #[cfg(target_os = "linux")]
+        "cuda" => {
+            let mut s = cuda::Session::new(p).unwrap();
+            eprintln!("{}", s.description);
+            s.load(&model).unwrap();
             Box::new(move || s.run(&input).unwrap())
         }
         _ => panic!("unknown device"),
