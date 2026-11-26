@@ -14,7 +14,8 @@ const within = (ms, what, promise) =>
   Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out: ${what}`)), ms).unref())])
 const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'inherit'] })
 await within(60000, 'vite preview', new Promise((resolve, reject) => {
-  server.stdout.on('data', (d) => /Local:/.test(String(d)) && resolve())
+  // Not /Local:/: with CI set, vite prints a bold "Local" before the colon.
+  server.stdout.on('data', (d) => /Local/.test(String(d)) && resolve())
   server.on('exit', (code) => reject(new Error(`vite preview exited (${code}); is port ${port} free?`)))
 }))
 console.log('vite preview: up')
