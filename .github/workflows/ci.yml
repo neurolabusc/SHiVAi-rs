@@ -16,6 +16,13 @@ jobs:
       - name: Format, lint, and the conformance graph on CPU and Metal
         run: make lint test
 
+  rust-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format, lint, and the conformance graph on CPU (AVX2) and CUDA (skipped without a GPU)
+        run: make lint test
+
   web:
     runs-on: macos-latest
     steps:

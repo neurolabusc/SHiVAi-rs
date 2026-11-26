@@ -4,13 +4,15 @@ present (git-ignored).
 ## What this is
 
 SHiVAi's default pipeline (brain mask, preprocessing, PVS/WMH/lacune networks, cluster post-processing)
-in Rust, for the browser (WebAssembly + WebGPU) and the command line (Metal, CPU). See README.md.
+in Rust, for the browser (WebAssembly + WebGPU) and the command line (Metal, CUDA, CPU). See README.md.
 
 ## Rules
 
 - One implementation: pipeline logic lives in `crates/core` only. `crates/cli` (native) and `crates/wasm` +
   `src/worker.ts` (browser) are thin drivers around its stages (`T1Prep` → `Prepared`), its plan and its
-  generated kernels (`kernels.rs`, WGSL and MSL from one description). `src/gpu.ts` is a generic dispatcher.
+  generated kernels (`kernels.rs`, WGSL, MSL and CUDA C++ from one description). `src/gpu.ts` is a generic
+  dispatcher. A change to `kernels.rs` for one language must leave the others byte-identical (diff the
+  generated kernels of every model before and after).
 - Every backend must pass `fixtures/conformance.*` (`cargo test`, `make smoke`). Preprocessing changes must
   keep `SHIVAI_REFERENCE_DIR=… SHIVAI_REFERENCE_T1=… cargo test --release -p shivai-core stages` passing against SHiVAi's own outputs
   (`tools/shivai_reference.py`); end-to-end runs are scored with `validation/score.py`.
@@ -19,8 +21,16 @@ in Rust, for the browser (WebAssembly + WebGPU) and the command line (Metal, CPU
 - CPU: one packed-convolution path (`cpu.rs`). FP32 SME (`sme.c`, runtime-detected, M4+, layers with ≥ 16
   output channels) else the portable register-tiled kernel (NEON + FMA on aarch64). Feature `sme` builds
   `sme.c` only on macOS arm64; one notarized binary serves all Apple silicon.
-- GPU: `src/gpu.ts` and `crates/cli/src/metal.rs` wait every 8 layers. Registration is
-  `niimath -robustfov -allineate <t1 crop> -warp shr -cost nmi` in both CLI and browser
+- GPU: `src/gpu.ts` and `crates/cli/src/metal.rs` wait every 8 layers; `crates/cli/src/cuda.rs` keeps at
+  most 8 layers in flight. CUDA (Linux) has three convolution kernels: the shared implicit matrix
+  multiplication, a direct one for stride-1 and transposed layers on large grids (`direct`, w ≥ 32) and a
+  split reduction for small grids (`split`); `crates/cli/tests/cuda.rs` runs the conformance graph on
+  grids that reach all three. libcuda and NVRTC are opened at run time (`libloading`): building needs no
+  CUDA, and the default device falls back to the CPU without them. Kernels are cached by SHA-256 in
+  `~/.cache/shivai-rs/cuda`.
+- x86-64 CPU: `cpu::tiles` is also compiled with AVX2 + FMA and chosen at run time (Haswell or later);
+  the binary's baseline stays SSE2.
+- Registration is `niimath -robustfov -allineate <t1 crop> -warp shr -cost nmi` in both CLI and browser
   (`pipeline::REGISTRATION`).
 - Outputs are a public contract owned by `crates/core/src/report.rs` (names, `summary.tsv`, provenance with
   `schema`); both drivers only call it. A breaking change bumps `SCHEMA` and is listed in the README (`Outputs` matches `suffixes`/`add_marker`/`finish`).
@@ -61,7 +71,6 @@ without a Metal device; setup failures fail. `SHIVAI_TEST_PORT` overrides the sm
   participants with the CLI, rank by cluster count, confirm visually.
 - Registration dominates run time (~14 s native, ~20 s in the browser with 8 threads). Option: a rigid
   schedule for niimath's fast engine (affine `-cost fast` takes 0.9 s but cut WMH Dice to 0.88).
-- No CUDA backend yet: implement the three kernels of `kernels.rs` and pass `fixtures/conformance.*`.
 - Deferred clean-ups: `kernels.rs` emission dedup and dialect simplification (gate on byte-identical kernels); the
   direct (≤ 8 channel) GPU path still declares workgroup arrays (benchmark before removing);
   `affine_transform`/`morph`/`transpose` hot loops (benchmark first); a synthetic CI test of

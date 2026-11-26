@@ -26,6 +26,12 @@ fn matmul(a: &[f32], b: &[f32], out: &mut [f32], rows: usize, cols: usize, depth
         crate::sme::matmul(a, b, out, rows, cols, depth);
         return;
     }
+    #[cfg(target_arch = "x86_64")]
+    if avx2_fma() {
+        // SAFETY: AVX2 and FMA were detected at run time.
+        unsafe { tiles_avx2(a, b, out, rows, cols, depth) };
+        return;
+    }
     // Padded channel counts are multiples of 4, and of 8 above 4.
     if cols.is_multiple_of(8) {
         tiles::<8>(a, b, out, rows, cols, depth)
@@ -34,8 +40,38 @@ fn matmul(a: &[f32], b: &[f32], out: &mut [f32], rows: usize, cols: usize, depth
     }
 }
 
+/// Haswell (2013) and later: the x86-64 baseline is SSE2 without FMA, so the same tiles are also
+/// compiled for AVX2 + FMA and chosen at run time; one binary serves every x86-64.
+#[cfg(target_arch = "x86_64")]
+fn avx2_fma() -> bool {
+    std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma")
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+fn tiles_avx2(a: &[f32], b: &[f32], out: &mut [f32], rows: usize, cols: usize, depth: usize) {
+    if cols.is_multiple_of(8) {
+        tiles_impl::<8, true>(a, b, out, rows, cols, depth)
+    } else {
+        tiles_impl::<4, true>(a, b, out, rows, cols, depth)
+    }
+}
+
 /// Register tiles of 8 rows × C columns, which the compiler keeps in vector registers (NEON, SSE/AVX).
 fn tiles<const C: usize>(
+    a: &[f32],
+    b: &[f32],
+    out: &mut [f32],
+    rows: usize,
+    cols: usize,
+    depth: usize,
+) {
+    tiles_impl::<C, false>(a, b, out, rows, cols, depth)
+}
+
+/// `FUSED`: the caller is compiled with FMA, so `mul_add` is one instruction.
+#[inline(always)]
+fn tiles_impl<const C: usize, const FUSED: bool>(
     a: &[f32],
     b: &[f32],
     out: &mut [f32],
@@ -52,7 +88,7 @@ fn tiles<const C: usize>(
                 let w: &[f32; C] = b[k * cols + c0..][..C].try_into().unwrap();
                 for (acc, &x) in acc.iter_mut().zip(x) {
                     for (acc, &w) in acc.iter_mut().zip(w) {
-                        *acc = madd(x, w, *acc);
+                        *acc = madd::<FUSED>(x, w, *acc);
                     }
                 }
             }
@@ -63,10 +99,11 @@ fn tiles<const C: usize>(
     }
 }
 
-/// Fused on aarch64, where FMA is baseline; elsewhere `mul_add` may be a slow library call.
+/// Fused on aarch64, where FMA is baseline, and in FMA-enabled callers; elsewhere `mul_add` may be
+/// a slow library call.
 #[inline(always)]
-fn madd(x: f32, w: f32, acc: f32) -> f32 {
-    if cfg!(target_arch = "aarch64") {
+fn madd<const FUSED: bool>(x: f32, w: f32, acc: f32) -> f32 {
+    if FUSED || cfg!(target_arch = "aarch64") {
         x.mul_add(w, acc)
     } else {
         acc + x * w
@@ -304,10 +341,12 @@ mod tests {
         for cols in [24usize, 12] {
             let a: Vec<_> = (0..depth * 64).map(|i| (i % 7) as f32 - 3.0).collect();
             let b: Vec<_> = (0..depth * cols).map(|i| (i % 5) as f32 - 2.0).collect();
-            // matmul is SME for 24 columns where available, so also check the portable kernel.
+            // matmul is SME (24 columns) or AVX2 + FMA where available, so also check the portable kernels.
             let mut kernels: Vec<Matmul> = vec![super::matmul];
             if cols == 24 {
                 kernels.push(super::tiles::<8>);
+            } else {
+                kernels.push(super::tiles::<4>);
             }
             for kernel in kernels {
                 let mut out = vec![1234.0; rows * cols + 1];

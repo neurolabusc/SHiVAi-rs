@@ -1,12 +1,13 @@
 # SHiVAi-rs
 
-Markers of cerebral small vessel disease from brain MRI, without Python, TensorFlow or CUDA:
+Markers of cerebral small vessel disease from brain MRI, without Python or TensorFlow:
 **perivascular spaces** (PVS) from a T1-weighted image, and **white matter hyperintensities** (WMH)
 and **lacunes** from a T1 with a FLAIR of the same session. It is a Rust port of the default
 [SHiVAi](https://github.com/pboutinaud/SHiVAi) pipeline and runs the published SHiVA models
 
 - in the **browser** (WebAssembly + WebGPU): no image leaves your computer, and
-- as a **command line** tool on macOS (Metal; a CPU backend runs anywhere).
+- as a **command line** tool on macOS (Metal) and Linux (CUDA on NVIDIA GPUs); a CPU backend runs
+  anywhere.
 
 **Not for clinical use.**
 
@@ -70,6 +71,18 @@ package, `cargo build --release -p shivai-rs` builds `target/release/shivai-rs`.
 On an M4 Pro, T1 + FLAIR with all three markers takes about 23 s on Metal and 33 s on the CPU (SME on
 M4 and later, NEON on earlier Apple silicon); about 40 s in the browser.
 
+### Linux and NVIDIA GPUs (CUDA)
+
+`cargo build --release -p shivai-rs` builds the same executable on Linux; there it uses CUDA by
+default (`--device cuda`) and falls back to the CPU, saying why, when no NVIDIA GPU is usable
+(`--device cuda` then fails instead). Building needs no CUDA toolkit: at run time `shivai-rs` opens the
+NVIDIA driver (`libcuda.so.1`) and NVRTC, which compiles each layer's kernel for the GPU it finds.
+NVRTC comes with the CUDA toolkit (12 or 13), or from `pip install nvidia-cuda-nvrtc-cu12`; it is looked
+for as `$SHIVAI_NVRTC`, then beside `shivai-rs`, then `libnvrtc.so.13`/`.12` on the library path and in
+`/usr/local/cuda/lib64`. Compiled kernels are cached in `~/.cache/shivai-rs/cuda` (`$XDG_CACHE_HOME` if
+set), so only the first run of a model compiles. NVRTC 12 supports Maxwell (2014) and later GPUs, NVRTC 13
+Turing (2018) and later; it has been tested on an A100. On x86-64 the CPU backend uses AVX2 and FMA when present (Haswell, 2013, or later), else SSE2.
+
 ## Outputs
 
 The command line and the web app's **Save all** (one `<name>_shivai.zip`) write the same files,
@@ -83,7 +96,7 @@ The command line and the web app's **Save all** (one `<name>_shivai.zip`) write 
 | `<marker>_probability.nii.gz` | Mean probability of the model's folds (float32); marker `pvs`, `wmh` or `lac` |
 | `<marker>_clusters.nii.gz` | Clusters above threshold, numbered from 1 (int16) |
 | `summary.tsv` | `marker`, `clusters`, `volume_mm3` per marker |
-| `shivai.json` | Provenance: `schema`, `version`, `software`, `backend`, `t1`, `flair` (input file names), `seconds`, `registration` (niimath command, with a FLAIR), `models` {`license`, `license_owner`, `revision`, `sha256` per file}, `markers` [{`marker`, `label`, `clusters`, `volume_mm3`, `threshold`, `min_size`, `cluster_voxels`}], `warnings` |
+| `shivai.json` | Provenance: `schema`, `version`, `software`, `backend` (`Cuda+Cpu` when CUDA ran out of memory partway and the rest ran on the CPU), `t1`, `flair` (input file names), `seconds`, `registration` (niimath command, with a FLAIR), `models` {`license`, `license_owner`, `revision`, `sha256` per file}, `markers` [{`marker`, `label`, `clusters`, `volume_mm3`, `threshold`, `min_size`, `cluster_voxels`}], `warnings` |
 
 **Stability:** this is version 0.1. From 1.0 these names, the summary columns, the provenance keys
 (versioned by `schema`) and the command-line flags change only with a major version. Outputs in other
@@ -107,8 +120,8 @@ The repository holds one implementation of all of this:
 
 | Path | Contents |
 | --- | --- |
-| `crates/core` | Preprocessing, the network execution plan, GPU kernel generation (WGSL and Metal), post-processing, NIfTI |
-| `crates/cli` | The `shivai-rs` executable: Metal and CPU execution, niimath, model download |
+| `crates/core` | Preprocessing, the network execution plan, GPU kernel generation (WGSL, Metal and CUDA), post-processing, NIfTI |
+| `crates/cli` | The `shivai-rs` executable: Metal, CUDA and CPU execution, niimath, model download |
 | `crates/wasm` | The same pipeline for the browser (wasm-bindgen) |
 | `src/`, `index.html` | The web app: NiiVue display, dcm2niix import, a worker running the pipeline with WebGPU and niimath |
 | `models.json` | The model files: checksums, licence, owner, provenance and the pinned download revision |

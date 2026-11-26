@@ -1,5 +1,7 @@
-// shivai-rs: SHiVAi's small vessel disease segmentation as a native executable (Metal or CPU), with
-// native niimath for the rigid FLAIR-to-T1 registration.
+// shivai-rs: SHiVAi's small vessel disease segmentation as a native executable (Metal, CUDA or CPU),
+// with native niimath for the rigid FLAIR-to-T1 registration.
+#[cfg(target_os = "linux")]
+mod cuda;
 #[cfg(target_os = "macos")]
 mod metal;
 
@@ -32,7 +34,8 @@ Usage: shivai-rs --t1 T1.nii.gz [--flair FLAIR.nii.gz] --out DIR [options]
                    Markers to segment (default: pvs, plus wmh with a FLAIR)
   --models DIR     Folder of the .shiva model files (default: $SHIVAI_MODELS, then
                    /usr/local/share/shivai-rs/models, else downloaded once into the user cache)
-  --device DEV     metal (macOS default) or cpu
+  --device DEV     metal (macOS default), cuda (Linux default when an NVIDIA driver and NVRTC
+                   load, else cpu) or cpu
   --niimath PATH   niimath for the FLAIR registration (default: $SHIVAI_NIIMATH, else the one
                    beside shivai-rs, else PATH)
   --force          Replace existing outputs
@@ -50,6 +53,8 @@ enum Device {
     Cpu,
     #[cfg(target_os = "macos")]
     Metal,
+    #[cfg(target_os = "linux")]
+    Cuda,
 }
 
 struct Args {
@@ -60,6 +65,7 @@ struct Args {
     models: PathBuf,
     download: bool,
     device: Device,
+    explicit: bool, // --device given: no fallback to the CPU
     niimath: PathBuf,
     force: bool,
     quiet: bool,
@@ -76,8 +82,11 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut tasks = Vec::new();
     #[cfg(target_os = "macos")]
     let mut device = Device::Metal;
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    let mut device = Device::Cuda;
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let mut device = Device::Cpu;
+    let mut explicit = false;
     let mut niimath = std::env::var_os("SHIVAI_NIIMATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| "niimath".into());
@@ -91,10 +100,13 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--models" => models = Some(PathBuf::from(value()?)),
             "--niimath" => niimath = PathBuf::from(value()?),
             "--device" => {
+                explicit = true;
                 device = match value()?.as_str() {
                     "cpu" => Device::Cpu,
                     #[cfg(target_os = "macos")]
                     "metal" => Device::Metal,
+                    #[cfg(target_os = "linux")]
+                    "cuda" => Device::Cuda,
                     d => return Err(format!("Unknown device {d}.")),
                 }
             }
@@ -150,6 +162,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         models,
         download,
         device,
+        explicit,
         niimath,
         force,
         quiet,
@@ -239,11 +252,18 @@ enum Session {
     Cpu(cpu::Session),
     #[cfg(target_os = "macos")]
     Metal(metal::Session),
+    #[cfg(target_os = "linux")]
+    Cuda(cuda::Session),
 }
 
 /// Runs ensembles; one session (one graph) is resident at a time.
 struct Predictor<'a> {
     device: Device,
+    // Read only by the CUDA fallback.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    explicit: bool,
+    /// Devices that ran inference, in order: more than one when CUDA fell back to the CPU.
+    used: Vec<Device>,
     current: Option<(String, Session)>,
     say: &'a dyn Fn(&str),
 }
@@ -261,8 +281,29 @@ impl Predictor<'_> {
                     (self.say)(&format!("Metal session {} MiB", s.bytes() >> 20));
                     Session::Metal(s)
                 }
+                #[cfg(target_os = "linux")]
+                Device::Cuda => match cuda::Session::new(p) {
+                    Ok(s) => {
+                        (self.say)(&format!(
+                            "CUDA session {} MiB on {}",
+                            s.bytes() >> 20,
+                            s.description
+                        ));
+                        Session::Cuda(s)
+                    }
+                    // The default device falls back to the CPU; --device cuda does not.
+                    Err(e) if !self.explicit => {
+                        (self.say)(&format!("CUDA unavailable ({e}); using the CPU"));
+                        self.device = Device::Cpu;
+                        Session::Cpu(cpu::Session::new(plan(&folds[0], GRID)?))
+                    }
+                    Err(e) => return Err(e),
+                },
             };
             self.current = Some((folds[0].signature.clone(), session));
+        }
+        if !self.used.contains(&self.device) {
+            self.used.push(self.device);
         }
         let input = to_network(channels);
         let mut ensemble = Ensemble::new();
@@ -277,10 +318,28 @@ impl Predictor<'_> {
                     s.load(fold);
                     s.run(&input)?
                 }
+                #[cfg(target_os = "linux")]
+                Session::Cuda(s) => {
+                    s.load(fold)?;
+                    s.run(&input)?
+                }
             };
             ensemble.add(&out);
         }
         Ok(ensemble.mean())
+    }
+
+    /// `Cuda`, `Cpu`, …; `Cuda+Cpu` when CUDA fell back to the CPU partway through.
+    fn backend(&self) -> String {
+        let used = if self.used.is_empty() {
+            std::slice::from_ref(&self.device)
+        } else {
+            &self.used
+        };
+        used.iter()
+            .map(|d| format!("{d:?}"))
+            .collect::<Vec<_>>()
+            .join("+")
     }
 }
 
@@ -307,8 +366,16 @@ fn register(flair: &Path, prepared: &Prepared, niimath: &Path) -> Result<Volume,
             nifti::write(Data::F32(&t.data), t.dims, &t.affine, "SHiVAi T1 crop"),
         )
         .map_err(|e| e.to_string())?;
-        let run = Command::new(niimath)
-            .arg(flair)
+        let mut command = Command::new(niimath);
+        command.arg(flair);
+        // OpenMP counts the host's CPUs, not a container's CPU quota (cgroup cpu.max), and an
+        // oversubscribed quota is throttled; the result does not depend on the thread count.
+        if std::env::var_os("OMP_NUM_THREADS").is_none() {
+            if let Ok(n) = std::thread::available_parallelism() {
+                command.args(["-p", &n.to_string()]);
+            }
+        }
+        let run = command
             .args(["-robustfov", "-allineate"])
             .arg(&fixed)
             .args(REGISTRATION)
@@ -378,6 +445,8 @@ fn run(a: Args) -> Result<(), String> {
     let brainmask = load(&a.models, "brainmask", a.download, &say)?;
     let mut predictor = Predictor {
         device: a.device,
+        explicit: a.explicit,
+        used: vec![],
         current: None,
         say: &say,
     };
@@ -428,7 +497,7 @@ fn run(a: Args) -> Result<(), String> {
     let file_name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().into_owned());
     let outputs = report.finish(json!({
         "software": "SHiVAi-rs command line",
-        "backend": format!("{:?}", a.device),
+        "backend": predictor.backend(),
         "t1": file_name(&a.t1),
         "flair": a.flair.as_deref().and_then(file_name),
         "seconds": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0,
